@@ -159,7 +159,7 @@ function Employees() {
   // 🔥 Szűrés
   const filteredEmployees = employees.filter(emp =>
     (filters.department === "" || emp.department === filters.department) &&
-    (filters.hire === "" || emp.hire.includes(filters.hire)) &&
+    (filters.employee_number === "" || emp.employee_number.includes(filters.employee_number )) &&
     (filters.status === "" || emp.status === filters.status)
   );
 
@@ -221,9 +221,9 @@ function Employees() {
 
             <input
               type="text"
-              placeholder="Hire dátum (pl. 2023)"
-              value={filters.hire}
-              onChange={(e) => setFilters({ ...filters, hire: e.target.value })}
+              placeholder="Törzsszám Keresése.."
+              value={filters.employee_number}
+              onChange={(e) => setFilters({ ...filters, employee_number: e.target.value })}
             />
 
             <select
