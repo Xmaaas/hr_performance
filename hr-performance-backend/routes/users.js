@@ -4,16 +4,17 @@ const crypto = require("crypto");
 const db = require("../db");
 const sendEmail = require("../utils/sendEmail");
 const bcrypt = require("bcrypt");
+const authMiddleware = require("../middleware/authMiddleware");
+const adminOnly = require("../middleware/adminOnly");
 
 
 // ------------------------------------------------------
 //  ÚJ FELHASZNÁLÓ LÉTREHOZÁSA – AUTOMATIKUS ROLE KIOSZTÁS
 // ------------------------------------------------------
-router.post("/create-user", async (req, res) => {
+router.post("/create-user", authMiddleware, adminOnly, async (req, res) => {
   const { email, name, employeeNumber } = req.body;
 
   try {
-    // 1) Ellenőrizzük, hogy a törzsszám létezik-e az employees táblában
     const [emp] = await db.query(
       "SELECT employee_number, role FROM employees WHERE employee_number = ?",
       [employeeNumber]
@@ -26,14 +27,11 @@ router.post("/create-user", async (req, res) => {
       });
     }
 
-    // 2) A dolgozóhoz tartozó role automatikusan jön az Excelből
     const employeeRole = emp[0].role || "user";
 
-    // 3) Token generálása jelszó beállításhoz
     const resetToken = crypto.randomBytes(32).toString("hex");
-    const resetExpires = new Date(Date.now() + 1000 * 60 * 60); // 1 óra
+    const resetExpires = new Date(Date.now() + 1000 * 60 * 60);
 
-    // 4) User létrehozása employee_number-rel + automatikus role-lal
     const sql = `
       INSERT INTO users (email, name, role, employee_number, reset_token, reset_expires)
       VALUES (?, ?, ?, ?, ?, ?)
@@ -48,7 +46,6 @@ router.post("/create-user", async (req, res) => {
       resetExpires
     ]);
 
-    // 5) Jelszó beállító link
     const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
 
     await sendEmail(
@@ -116,53 +113,60 @@ router.post("/reset-password", async (req, res) => {
 // ------------------------------------------------------
 //  ADMIN / HR ÁLTAL INDÍTOTT JELSZÓ RESET LINK KÜLDÉSE
 // ------------------------------------------------------
-router.post("/send-reset-link/:employee_number", async (req, res) => {
-  const employee_number = req.params.employee_number;
+router.post(
+  "/send-reset-link/:employee_number",
+  authMiddleware,
+  adminOnly,
+  async (req, res) => {
 
-  try {
-    // 1) User keresése
-    const [rows] = await db.query(
-      "SELECT * FROM users WHERE employee_number = ?",
-      [employee_number]
-    );
+    const employee_number = req.params.employee_number;
 
-    if (rows.length === 0) {
-      return res.json({ success: false, message: "Nincs ilyen felhasználó." });
+    try {
+      const [rows] = await db.query(
+        "SELECT * FROM users WHERE employee_number = ?",
+        [employee_number]
+      );
+
+      if (rows.length === 0) {
+        return res.json({ success: false, message: "Nincs ilyen felhasználó." });
+      }
+
+      const user = rows[0];
+
+      const resetToken = crypto.randomBytes(32).toString("hex");
+      const resetExpires = new Date(Date.now() + 1000 * 60 * 60);
+
+      await db.query(
+        "UPDATE users SET reset_token = ?, reset_expires = ? WHERE employee_number = ?",
+        [resetToken, resetExpires, employee_number]
+      );
+
+      const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
+
+      await sendEmail(
+        user.email,
+        "Jelszó visszaállítása",
+        `
+          <h2>Szia ${user.name}!</h2>
+          <p>Kattints az alábbi linkre a jelszó beállításához:</p>
+          <a href="${resetLink}">${resetLink}</a>
+          <p>A link 1 óráig érvényes.</p>
+        `
+      );
+
+      await db.query(
+        "INSERT INTO audit_log (user_id, action, target_employee_number) VALUES (?, ?, ?)",
+        [req.user.id, "Jelszó reset link kiküldése", employee_number]
+      );
+
+      res.json({ success: true, message: "Jelszóbeállító link elküldve!" });
+
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ success: false, message: "Szerver hiba" });
     }
-
-    const user = rows[0];
-
-    // 2) Token generálása
-    const resetToken = crypto.randomBytes(32).toString("hex");
-    const resetExpires = new Date(Date.now() + 1000 * 60 * 60); // 1 óra
-
-    await db.query(
-      "UPDATE users SET reset_token = ?, reset_expires = ? WHERE employee_number = ?",
-      [resetToken, resetExpires, employee_number]
-    );
-
-    // 3) Link összeállítása
-    const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
-
-    // 4) Email küldése
-    await sendEmail(
-      user.email,
-      "Jelszó visszaállítása",
-      `
-        <h2>Szia ${user.name}!</h2>
-        <p>Kattints az alábbi linkre a jelszó beállításához:</p>
-        <a href="${resetLink}">${resetLink}</a>
-        <p>A link 1 óráig érvényes.</p>
-      `
-    );
-
-    res.json({ success: true, message: "Jelszóbeállító link elküldve!" });
-
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: "Szerver hiba" });
   }
-});
+);
 
 
 // ------------------------------------------------------
@@ -180,6 +184,31 @@ router.get("/test-email", async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: "Hiba az emailküldésben" });
+  }
+});
+
+
+// ------------------------------------------------------
+//  AUDIT LOG LEKÉRDEZÉSE – CSAK ADMIN
+// ------------------------------------------------------
+router.get("/audit-log", authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const [rows] = await db.query(`
+      SELECT 
+        a.id,
+        a.action,
+        a.target_employee_number,
+        a.timestamp,
+        u.name AS performed_by
+      FROM audit_log a
+      JOIN users u ON a.user_id = u.id
+      ORDER BY a.timestamp DESC
+    `);
+
+    res.json(rows);
+  } catch (err) {
+    console.error("Audit log hiba:", err);
+    res.status(500).json({ success: false, message: "Szerver hiba" });
   }
 });
 

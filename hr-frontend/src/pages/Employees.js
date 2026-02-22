@@ -31,7 +31,7 @@ function Employees() {
   const [employees, setEmployees] = useState([]);
   const [filters, setFilters] = useState({
     department: "",
-    hire: "",
+    employee_number: "",
     status: ""
   });
 

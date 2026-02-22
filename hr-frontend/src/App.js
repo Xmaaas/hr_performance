@@ -5,6 +5,8 @@ import Login from "./pages/Login";
 import ProtectedRoute from "./ProtectedRoute";
 import ResetPassword from "./pages/ResetPassword";
 import CreateUser from "./pages/CreateUser";
+import AuditLog from "./pages/AuditLog";
+
 
 function App() {
   const [token, setToken] = useState(localStorage.getItem("token"));
@@ -45,6 +47,12 @@ function App() {
                 </Link>
               )}
 
+              {isAdmin && (
+                <Link to="/audit-log" style={{ marginRight: "10px" }}>
+                  Audit napló
+                </Link>
+              )}
+
               <button onClick={handleLogout}>
                 Kijelentkezés
               </button>
@@ -58,7 +66,7 @@ function App() {
           <Route path="/login" element={<Login onLogin={handleLogin} />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/create-user" element={<CreateUser />} />
-
+          <Route path="/audit-log" element={<AuditLog />} />
           <Route
             path="/employees"
             element={

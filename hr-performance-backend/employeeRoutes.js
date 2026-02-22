@@ -65,6 +65,12 @@ router.post('/upload', authMiddleware, adminOrHR, upload.single('file'), async (
       SET u.employee_number = e.employee_number
     `);
 
+    // Excel feltöltés log
+    await db.query(
+      "INSERT INTO audit_log (user_id, action) VALUES (?, ?)",
+      [req.user.id, "Excel feltöltés"]
+    );
+
     res.json({ message: 'Dolgozók sikeresen feltöltve és users tábla frissítve!' });
 
   } catch (error) {
@@ -151,9 +157,40 @@ router.put('/status/:employee_number',authMiddleware, adminOrHR, async (req, res
       [status, employee_number]
     );
 
+    //státusz váltás log
+    await db.query(
+      "INSERT INTO audit_log (user_id, action, target_employee_number) VALUES (?, ?, ?)",
+      [req.user.id, `Státusz módosítás: ${status}`, employee_number]
+    );
+
+
     res.json({ success: true, message: "Státusz frissítve" });
   } catch (err) {
     console.error("Státusz frissítési hiba:", err);
+    res.status(500).json({ success: false, message: "Szerver hiba" });
+  }
+});
+
+// ------------------------------------------------------
+//  AUDIT LOG LEKÉRDEZÉSE – CSAK ADMIN
+// ------------------------------------------------------
+router.get("/audit-log", authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const [rows] = await db.query(`
+      SELECT 
+        a.id,
+        a.action,
+        a.target_employee_number,
+        a.timestamp,
+        u.name AS performed_by
+      FROM audit_log a
+      JOIN users u ON a.user_id = u.id
+      ORDER BY a.timestamp DESC
+    `);
+
+    res.json(rows);
+  } catch (err) {
+    console.error("Audit log hiba:", err);
     res.status(500).json({ success: false, message: "Szerver hiba" });
   }
 });
