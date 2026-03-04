@@ -3,14 +3,18 @@ import { useNavigate } from "react-router-dom";
 
 function AuditLog() {
   const [logs, setLogs] = useState([]);
-  const navigate = useNavigate();
+  const [filters, setFilters] = useState({
+    target: "",
+    performedBy: ""
+  });
 
+  const navigate = useNavigate();
   const user = JSON.parse(localStorage.getItem("user"));
   const token = localStorage.getItem("token");
 
   useEffect(() => {
     if (!user || user.role !== "admin") {
-      navigate("/"); // nincs jogosultság
+      navigate("/");
       return;
     }
 
@@ -23,10 +27,49 @@ function AuditLog() {
       .then(data => setLogs(data));
   }, [user, navigate, token]);
 
+  // 🔥 Egyszerű szűrés
+  const filteredLogs = logs.filter(log =>
+    (filters.target === "" ||
+      (log.target_employee_number || "").toString().includes(filters.target)) &&
+    (filters.performedBy === "" ||
+      (log.performed_by || "").toString().includes(filters.performedBy))
+  );
+
   return (
     <div style={{ padding: "20px" }}>
       <h2>Audit napló</h2>
 
+      {/* 🔥 SZŰRŐK */}
+      <div
+        style={{
+          display: "flex",
+          gap: "1rem",
+          marginBottom: "20px",
+          flexWrap: "wrap"
+        }}
+      >
+        <div>
+          <label>Érintett dolgozó (törzsszám):</label><br />
+          <input
+            type="text"
+            placeholder="pl. 12345"
+            value={filters.target}
+            onChange={(e) => setFilters({ ...filters, target: e.target.value })}
+          />
+        </div>
+
+        <div>
+          <label>Végrehajtó (név vagy törzsszám):</label><br />
+          <input
+            type="text"
+            placeholder="pl. Kovács"
+            value={filters.performedBy}
+            onChange={(e) => setFilters({ ...filters, performedBy: e.target.value })}
+          />
+        </div>
+      </div>
+
+      {/* 🔥 TÁBLÁZAT */}
       <table border="1" cellPadding="8">
         <thead>
           <tr>
@@ -39,7 +82,7 @@ function AuditLog() {
         </thead>
 
         <tbody>
-          {logs.map(log => (
+          {filteredLogs.map(log => (
             <tr key={log.id}>
               <td>{log.id}</td>
               <td>{log.action}</td>

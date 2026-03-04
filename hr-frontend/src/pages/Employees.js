@@ -1,30 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-// Profilkártya komponens
-function ProfileCard({ emp }) {
-  if (!emp) return null;
-
-  return (
-    <div style={{
-      border: "1px solid #ddd",
-      borderRadius: "12px",
-      padding: "20px",
-      maxWidth: "350px",
-      boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
-      background: "white",
-      marginBottom: "20px"
-    }}>
-      <h2 style={{ marginBottom: "10px" }}>{emp.name}</h2>
-      <p><strong>Törzsszám:</strong> {emp.employee_number}</p>
-      <p><strong>Email:</strong> {emp.email}</p>
-      <p><strong>Osztály:</strong> {emp.department}</p>
-      <p><strong>Státusz:</strong> {emp.status}</p>
-      <p><strong>Felvétel:</strong> {emp.hire}</p>
-      <p><strong>Fizetés:</strong> {emp.salary}</p>
-    </div>
-  );
-}
 
 function Employees() {
   const [selectedFile, setSelectedFile] = useState(null);
@@ -171,25 +147,10 @@ function Employees() {
   const isAdmin = user.role === "admin";
   const isHR = user.role === "hr";
   const isLeader = user.role === "leader";
-  const isUser = user.role === "user";
-
-  // Saját adat lekérése
-  const own = employees.find(e => e.employee_number === user.employee_number);
 
   return (
     <div style={{ padding: "20px" }}>
-      <h2>Saját adataid</h2>
-
-      {/* MINDENKI saját kártyát lát */}
-      <ProfileCard emp={own} />
-
-      {/* USER csak saját kártyát lát */}
-      {isUser && (
-        <div style={{ marginTop: "20px", fontStyle: "italic" }}>
-          Csak a saját adataidat láthatod.
-        </div>
-      )}
-
+      
       {/* ADMIN, HR, LEADER → táblázat is */}
       {(isAdmin || isHR || isLeader) && (
         <>

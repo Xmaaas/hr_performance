@@ -2,7 +2,6 @@ const express = require('express');
 const router = express.Router();
 const ExcelJS = require('exceljs');
 const db = require('./db');
-const pool = require("./db");
 const upload = require('./upload');
 const authMiddleware = require('./middleware/authMiddleware');
 const adminOnly = require('./middleware/adminOnly');
@@ -14,7 +13,6 @@ const adminOrHR = require('./middleware/adminOrHR');
 // ------------------------------------------------------
 router.post('/upload', authMiddleware, adminOrHR, upload.single('file'), async (req, res) => {
   try {
-    // Régi adatok törlése
     await db.query("DELETE FROM employees");
 
     const workbook = new ExcelJS.Workbook();
@@ -32,13 +30,10 @@ router.post('/upload', authMiddleware, adminOrHR, upload.single('file'), async (
       const department = row.getCell(5).value;
       const salary = row.getCell(6).value;
       const status = row.getCell(7).value;
-
       const role = row.getCell(8).value;
       const leader_id = row.getCell(9).value;
 
-      if (!employee_number || employee_number.toString().trim() === "") {
-        continue;
-      }
+      if (!employee_number || employee_number.toString().trim() === "") continue;
 
       await db.query(
         `INSERT INTO employees 
@@ -58,14 +53,12 @@ router.post('/upload', authMiddleware, adminOrHR, upload.single('file'), async (
       );
     }
 
-    // 🔥 USERS TÁBLA AUTOMATIKUS SZINKRONIZÁLÁSA
     await db.query(`
       UPDATE users u
       JOIN employees e ON u.email = e.email
       SET u.employee_number = e.employee_number
     `);
 
-    // Excel feltöltés log
     await db.query(
       "INSERT INTO audit_log (user_id, action) VALUES (?, ?)",
       [req.user.id, "Excel feltöltés"]
@@ -80,6 +73,30 @@ router.post('/upload', authMiddleware, adminOrHR, upload.single('file'), async (
 });
 
 
+// ------------------------------------------------------
+//  SAJÁT ADATOK LEKÉRÉSE – minden bejelentkezett usernek
+// ------------------------------------------------------
+router.get('/me', authMiddleware, async (req, res) => {
+  try {
+    const empNum = req.user.employee_number;
+
+    const [rows] = await db.query(
+      "SELECT * FROM employees WHERE employee_number = ?",
+      [empNum]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: "Nincs ilyen dolgozó." });
+    }
+
+    res.json(rows[0]);
+
+  } catch (err) {
+    console.error("Hiba a saját adatlap lekérdezésénél:", err);
+    res.status(500).json({ error: "Szerver hiba" });
+  }
+});
+
 
 // ------------------------------------------------------
 //  DOLGOZÓK LISTÁZÁSA – Role alapú jogosultságokkal
@@ -89,28 +106,19 @@ router.get('/', authMiddleware, async (req, res) => {
     const userRole = req.user.role;
     const empNum = req.user.employee_number;
 
-    // ADMIN → mindent lát
-    if (userRole === "admin") {
+    if (userRole === "admin" || userRole === "hr") {
       const [rows] = await db.query("SELECT * FROM employees");
       return res.json(rows);
     }
 
-    // HR → mindent lát
-    if (userRole === "hr") {
-      const [rows] = await db.query("SELECT * FROM employees");
-      return res.json(rows);
-    }
-
-    // LEADER → saját + beosztottak
     if (userRole === "leader") {
-      const [rows] = await pool.query(
+      const [rows] = await db.query(
         "SELECT * FROM employees WHERE leader_id = ? OR employee_number = ?",
         [empNum, empNum]
       );
       return res.json(rows);
     }
 
-    // USER → csak saját adatlap
     const [rows] = await db.query(
       "SELECT * FROM employees WHERE employee_number = ?",
       [empNum]
@@ -126,7 +134,7 @@ router.get('/', authMiddleware, async (req, res) => {
 
 
 // ------------------------------------------------------
-//  SQL LEKÉRDEZŐ (admin / hr / leader / user is használhatja)
+//  SQL LEKÉRDEZŐ
 // ------------------------------------------------------
 router.post('/query', authMiddleware, async (req, res) => {
   const { sql } = req.body;
@@ -144,10 +152,11 @@ router.post('/query', authMiddleware, async (req, res) => {
   }
 });
 
+
 // ------------------------------------------------------
-//  DOLGOZÓ STÁTUSZ VÁLTÁSA (Active <-> Passive)
+//  DOLGOZÓ STÁTUSZ VÁLTÁSA
 // ------------------------------------------------------
-router.put('/status/:employee_number',authMiddleware, adminOrHR, async (req, res) => {
+router.put('/status/:employee_number', authMiddleware, adminOrHR, async (req, res) => {
   const { employee_number } = req.params;
   const { status } = req.body;
 
@@ -157,12 +166,10 @@ router.put('/status/:employee_number',authMiddleware, adminOrHR, async (req, res
       [status, employee_number]
     );
 
-    //státusz váltás log
     await db.query(
       "INSERT INTO audit_log (user_id, action, target_employee_number) VALUES (?, ?, ?)",
       [req.user.id, `Státusz módosítás: ${status}`, employee_number]
     );
-
 
     res.json({ success: true, message: "Státusz frissítve" });
   } catch (err) {
@@ -171,8 +178,9 @@ router.put('/status/:employee_number',authMiddleware, adminOrHR, async (req, res
   }
 });
 
+
 // ------------------------------------------------------
-//  AUDIT LOG LEKÉRDEZÉSE – CSAK ADMIN
+//  AUDIT LOG – CSAK ADMIN
 // ------------------------------------------------------
 router.get("/audit-log", authMiddleware, adminOnly, async (req, res) => {
   try {
