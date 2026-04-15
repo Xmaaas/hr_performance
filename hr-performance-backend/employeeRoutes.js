@@ -9,16 +9,17 @@ const adminOrHR = require('./middleware/adminOrHR');
 
 
 // ------------------------------------------------------
-//  EXCEL FELTÖLTÉS – Role + LeaderId beolvasással
+//  EXCEL FELTÖLTÉS – Role + LeaderId beolvasással (FK-biztos verzió)
 // ------------------------------------------------------
 router.post('/upload', authMiddleware, adminOrHR, upload.single('file'), async (req, res) => {
   try {
-    await db.query("DELETE FROM employees");
-
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.readFile(req.file.path);
 
     const worksheet = workbook.getWorksheet('worksheet');
+
+    // Excelben szereplő employee_number-ek listája
+    const excelEmployees = [];
 
     for (let rowNumber = 2; rowNumber <= worksheet.rowCount; rowNumber++) {
       const row = worksheet.getRow(rowNumber);
@@ -34,6 +35,8 @@ router.post('/upload', authMiddleware, adminOrHR, upload.single('file'), async (
       const leader_id = row.getCell(9).value;
 
       if (!employee_number || employee_number.toString().trim() === "") continue;
+
+      excelEmployees.push(employee_number.toString());
 
       await db.query(
         `INSERT INTO employees 
@@ -53,18 +56,28 @@ router.post('/upload', authMiddleware, adminOrHR, upload.single('file'), async (
       );
     }
 
+    // Inaktiváljuk azokat, akik NINCSENEK az Excelben
+    if (excelEmployees.length > 0) {
+      await db.query(
+        "UPDATE employees SET status = 'inactive' WHERE employee_number NOT IN (?)",
+        [excelEmployees]
+      );
+    }
+
+    // Users tábla frissítése employee_number-rel
     await db.query(`
       UPDATE users u
       JOIN employees e ON u.email = e.email
       SET u.employee_number = e.employee_number
     `);
 
+    // Audit log
     await db.query(
       "INSERT INTO audit_log (user_id, action) VALUES (?, ?)",
       [req.user.id, "Excel feltöltés"]
     );
 
-    res.json({ message: 'Dolgozók sikeresen feltöltve és users tábla frissítve!' });
+    res.json({ message: 'Dolgozók sikeresen frissítve, inaktiválva és users tábla szinkronizálva!' });
 
   } catch (error) {
     console.error(error);
@@ -202,6 +215,5 @@ router.get("/audit-log", authMiddleware, adminOnly, async (req, res) => {
     res.status(500).json({ success: false, message: "Szerver hiba" });
   }
 });
-
 
 module.exports = router;

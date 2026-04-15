@@ -1,19 +1,21 @@
 import { useState } from "react";
-import { useSearchParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
+
 
 function ResetPassword() {
+  const { token } = useParams();   // <<< EZ A LÉNYEG
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
-  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-
-  const token = searchParams.get("token");
+  console.log("TOKEN FROM PARAMS:", token);
 
   const handleSubmit = async () => {
     const res = await fetch("http://localhost:3001/api/reset-password", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ token, password })
+
+
     });
 
     const data = await res.json();
@@ -43,5 +45,4 @@ function ResetPassword() {
     </div>
   );
 }
-
 export default ResetPassword;

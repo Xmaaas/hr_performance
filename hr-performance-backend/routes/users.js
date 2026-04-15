@@ -11,7 +11,7 @@ const adminOnly = require("../middleware/adminOnly");
 // ------------------------------------------------------
 //  ÚJ FELHASZNÁLÓ LÉTREHOZÁSA – AUTOMATIKUS ROLE KIOSZTÁS
 // ------------------------------------------------------
-router.post("/create-user", authMiddleware, adminOnly, async (req, res) => {
+router.post("/create-user", async (req, res) => {
   const { email, name, employeeNumber } = req.body;
 
   try {
@@ -46,18 +46,18 @@ router.post("/create-user", authMiddleware, adminOnly, async (req, res) => {
       resetExpires
     ]);
 
-    const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
+    const resetLink = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
 
-    await sendEmail(
-      email,
-      "Jelszó beállítása",
-      `
+    await sendEmail({
+      to: email,
+      subject: "Jelszó beállítása",
+      html: `
         <h2>Szia ${name}!</h2>
         <p>Kattints az alábbi linkre a jelszó beállításához:</p>
         <a href="${resetLink}">${resetLink}</a>
         <p>A link 1 óráig érvényes.</p>
       `
-    );
+    });
 
     res.json({
       success: true,
@@ -67,45 +67,6 @@ router.post("/create-user", authMiddleware, adminOnly, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: "Hiba történt a létrehozás során" });
-  }
-});
-
-
-// ------------------------------------------------------
-//  JELSZÓ BEÁLLÍTÁSA TOKEN ALAPJÁN (USER OLDAL)
-// ------------------------------------------------------
-router.post("/reset-password", async (req, res) => {
-  const { token, password } = req.body;
-
-  try {
-    const [rows] = await db.query(
-      "SELECT * FROM users WHERE reset_token = ?",
-      [token]
-    );
-
-    if (rows.length === 0) {
-      return res.json({ success: false, message: "Érvénytelen token" });
-    }
-
-    const user = rows[0];
-
-    const now = new Date();
-    if (now > user.reset_expires) {
-      return res.json({ success: false, message: "A token lejárt" });
-    }
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    await db.query(
-      "UPDATE users SET password = ?, reset_token = NULL, reset_expires = NULL WHERE id = ?",
-      [hashedPassword, user.id]
-    );
-
-    res.json({ success: true, message: "A jelszó sikeresen beállítva!" });
-
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: "Szerver hiba" });
   }
 });
 
@@ -141,18 +102,18 @@ router.post(
         [resetToken, resetExpires, employee_number]
       );
 
-      const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
+      const resetLink = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
 
-      await sendEmail(
-        user.email,
-        "Jelszó visszaállítása",
-        `
+      await sendEmail({
+        to: user.email,
+        subject: "Jelszó visszaállítása",
+        html: `
           <h2>Szia ${user.name}!</h2>
           <p>Kattints az alábbi linkre a jelszó beállításához:</p>
           <a href="${resetLink}">${resetLink}</a>
           <p>A link 1 óráig érvényes.</p>
         `
-      );
+      });
 
       await db.query(
         "INSERT INTO audit_log (user_id, action, target_employee_number) VALUES (?, ?, ?)",
@@ -174,11 +135,11 @@ router.post(
 // ------------------------------------------------------
 router.get("/test-email", async (req, res) => {
   try {
-    await sendEmail(
-      "karacsony.gabor.istvan@gmail.com",
-      "Teszt email",
-      "<h1>Működik az emailküldés!</h1>"
-    );
+    await sendEmail({
+      to: "karacsony.gabor.istvan@gmail.com",
+      subject: "Teszt email",
+      html: "<h1>Működik az emailküldés!</h1>"
+    });
 
     res.json({ success: true, message: "Email elküldve!" });
   } catch (err) {

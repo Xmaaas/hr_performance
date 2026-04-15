@@ -8,17 +8,20 @@ import ResetPassword from "./pages/ResetPassword";
 import CreateUser from "./pages/CreateUser";
 import AuditLog from "./pages/AuditLog";
 import MyProfile from "./pages/MyProfile";
+import Subordinates from "./pages/Leader/Subordinates";
+import CreateGoal from "./pages/Leader/CreateGoal";
+import MyGoals from "./pages/Leader/MyGoals";
+import ForgotPassword from "./pages/ForgotPassword";
 
 function RoleProtectedRoute({ allowedRoles, children }) {
   const user = JSON.parse(localStorage.getItem("user"));
 
   if (!user || !allowedRoles.includes(user.role)) {
-    return <Navigate to="/me" />;
+    return <Navigate to="/me" replace />;
   }
 
   return children;
 }
-
 
 function App() {
   const [token, setToken] = useState(localStorage.getItem("token"));
@@ -56,32 +59,30 @@ function App() {
             fontFamily: "Arial, sans-serif"
           }}
         >
-          {/* Bal oldal – logó / app név */}
           <div style={{ fontSize: "20px", fontWeight: "bold", color: "#4C6EF5" }}>
             HR Performance
           </div>
 
-          {/* Jobb oldal – menüpontok */}
           {token && user && (
             <div style={{ display: "flex", alignItems: "center", gap: "15px" }}>
-              
-              {/* Saját adatok */}
+
+              {(isLeader || isAdmin) && (
+                <NavItem to="/leader/subordinates" label="Beosztottak" />
+              )}
+
+              <NavItem to="/my-goals" label="Céljaim" />
               <NavItem to="/me" label="Saját adataim" />
 
-              {/* Dolgozók – csak admin/hr/leader */}
               {(isAdmin || isHR || isLeader) && (
                 <NavItem to="/employees" label="Dolgozók" />
               )}
 
-              {/* Új felhasználó – admin/hr */}
               {(isAdmin || isHR) && (
                 <NavItem to="/create-user" label="Új felhasználó" />
               )}
 
-              {/* Audit log – csak admin */}
               {isAdmin && <NavItem to="/audit-log" label="Audit napló" />}
 
-              {/* Logout gomb */}
               <button
                 onClick={handleLogout}
                 style={{
@@ -102,12 +103,43 @@ function App() {
 
         {/* ROUTES */}
         <Routes>
-          <Route path="/" element={<Navigate to="/me" />} />
+          {/* Jelszó reset – EZT KELL ELŐRE TENNI */}
+          <Route path="/reset-password/:token" element={<ResetPassword />} />
 
+          <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/login" element={<Login onLogin={handleLogin} />} />
-          <Route path="/reset-password" element={<ResetPassword />} />
 
-          {/* Saját adatok */}
+          <Route
+            path="/leader/subordinates"
+            element={
+              <ProtectedRoute>
+                <RoleProtectedRoute allowedRoles={["leader", "admin"]}>
+                  <Subordinates />
+                </RoleProtectedRoute>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/leader/create-goal"
+            element={
+              <ProtectedRoute>
+                <RoleProtectedRoute allowedRoles={["leader", "admin"]}>
+                  <CreateGoal />
+                </RoleProtectedRoute>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/my-goals"
+            element={
+              <ProtectedRoute>
+                <MyGoals />
+              </ProtectedRoute>
+            }
+          />
+
           <Route
             path="/me"
             element={
@@ -117,17 +149,8 @@ function App() {
             }
           />
 
-          {/* Új felhasználó */}
-          <Route
-            path="/create-user"
-            element={
-              <ProtectedRoute>
-                <CreateUser />
-              </ProtectedRoute>
-            }
-          />
+          <Route path="/create-user" element={<CreateUser />} />
 
-          {/* Audit log */}
           <Route
             path="/audit-log"
             element={
@@ -137,7 +160,6 @@ function App() {
             }
           />
 
-          {/* Dolgozók */}
           <Route
             path="/employees"
             element={
@@ -148,13 +170,15 @@ function App() {
               </ProtectedRoute>
             }
           />
+
+          {/* EZ LEGYEN A LEGALJÁN! */}
+          <Route path="/" element={<Navigate to="/me" replace />} />
         </Routes>
 
       </div>
     </Router>
   );
 }
-
 
 function NavItem({ to, label }) {
   const location = useLocation();
@@ -183,6 +207,5 @@ function NavItem({ to, label }) {
     </Link>
   );
 }
-
 
 export default App;
