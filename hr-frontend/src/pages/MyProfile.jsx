@@ -10,7 +10,14 @@ function MyProfile() {
         Authorization: `Bearer ${token}`
       }
     })
-      .then(res => res.json())
+      .then(async res => {
+        if (res.status === 401) {
+          localStorage.clear();
+          window.location.href = "/login";
+          return;
+        }
+        return res.json();
+      })
       .then(data => setData(data));
   }, [token]);
 
@@ -29,7 +36,6 @@ function MyProfile() {
           fontFamily: "Arial, sans-serif"
         }}
       >
-        {/* Fejléc */}
         <div
           style={{
             background: "linear-gradient(135deg, #4C6EF5, #15AABF)",
@@ -39,7 +45,6 @@ function MyProfile() {
           }}
         ></div>
 
-        {/* Profilkép hely (opcionális) */}
         <div
           style={{
             width: "120px",
@@ -55,7 +60,7 @@ function MyProfile() {
             color: "#666"
           }}
         >
-          {data.name.charAt(0)}
+          {data?.name?.charAt(0) || ""}
         </div>
 
         <h2 style={{ margin: "10px 0 5px 0" }}>{data.name}</h2>
@@ -69,7 +74,6 @@ function MyProfile() {
             : "Dolgozó"}
         </p>
 
-        {/* Adatok */}
         <div style={{ textAlign: "left", marginTop: "20px" }}>
           <InfoRow label="Törzsszám" value={data.employee_number} />
           <InfoRow label="Email" value={data.email} />

@@ -8,7 +8,6 @@ const authRoutes = require("./routes/auth");
 const userRoutes = require("./routes/users");
 const goalsRoutes = require("./routes/goals");
 
-
 app.use(cors());
 app.use(express.json());
 app.use("/api/employees", employeeRoutes);

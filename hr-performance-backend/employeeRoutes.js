@@ -216,4 +216,18 @@ router.get("/audit-log", authMiddleware, adminOnly, async (req, res) => {
   }
 });
 
+//Célok
+router.get('/employees', authMiddleware, async (req, res) => {
+  try {
+    const [rows] = await db.query(
+      "SELECT employee_number, name FROM employees ORDER BY name ASC"
+    );
+    res.json({ success: true, employees: rows });
+  } catch (err) {
+    console.error("GET /employees ERROR:", err);
+    res.json({ success: false, message: "Szerver hiba" });
+  }
+});
+
+
 module.exports = router;

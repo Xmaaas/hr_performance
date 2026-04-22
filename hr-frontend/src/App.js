@@ -8,10 +8,10 @@ import ResetPassword from "./pages/ResetPassword";
 import CreateUser from "./pages/CreateUser";
 import AuditLog from "./pages/AuditLog";
 import MyProfile from "./pages/MyProfile";
-import Subordinates from "./pages/Leader/Subordinates";
 import CreateGoal from "./pages/Leader/CreateGoal";
 import MyGoals from "./pages/Leader/MyGoals";
 import ForgotPassword from "./pages/ForgotPassword";
+import GoalDetails from "./pages/Leader/GoalDetails";   // ⬅️ EZT ADD HOZZÁ
 
 function RoleProtectedRoute({ allowedRoles, children }) {
   const user = JSON.parse(localStorage.getItem("user"));
@@ -66,10 +66,6 @@ function App() {
           {token && user && (
             <div style={{ display: "flex", alignItems: "center", gap: "15px" }}>
 
-              {(isLeader || isAdmin) && (
-                <NavItem to="/leader/subordinates" label="Beosztottak" />
-              )}
-
               <NavItem to="/my-goals" label="Céljaim" />
               <NavItem to="/me" label="Saját adataim" />
 
@@ -109,17 +105,7 @@ function App() {
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/login" element={<Login onLogin={handleLogin} />} />
 
-          <Route
-            path="/leader/subordinates"
-            element={
-              <ProtectedRoute>
-                <RoleProtectedRoute allowedRoles={["leader", "admin"]}>
-                  <Subordinates />
-                </RoleProtectedRoute>
-              </ProtectedRoute>
-            }
-          />
-
+          {/* LEADER: Új cél létrehozása */}
           <Route
             path="/leader/create-goal"
             element={
@@ -130,6 +116,19 @@ function App() {
               </ProtectedRoute>
             }
           />
+
+          {/* ⬇️⬇️⬇️ HIÁNYZÓ ROUTE – MOSTANTÓL MŰKÖDIK ⬇️⬇️⬇️ */}
+          <Route
+            path="/leader/goal/:id"
+            element={
+              <ProtectedRoute>
+                <RoleProtectedRoute allowedRoles={["leader", "admin"]}>
+                  <GoalDetails />
+                </RoleProtectedRoute>
+              </ProtectedRoute>
+            }
+          />
+          {/* ⬆️⬆️⬆️ EZ OLDJA MEG A HIBÁT ⬆️⬆️⬆️ */}
 
           <Route
             path="/my-goals"

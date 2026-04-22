@@ -140,15 +140,19 @@ function Employees() {
         </div>
       )}
 
-      {/* SZŰRŐK */}
+      {/* SZŰRŐK + CÉL LÉTREHOZÁSA GOMB */}
       <div
         style={{
           display: "flex",
-          gap: "1rem",
+          justifyContent: "space-between",
+          alignItems: "center",
           marginBottom: "20px",
-          flexWrap: "wrap"
+          flexWrap: "wrap",
+          gap: "1rem"
         }}
       >
+      {/* SZŰRŐK BAL OLDALT */}
+      <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
         <select
           value={filters.department}
           onChange={(e) => setFilters({ ...filters, department: e.target.value })}
@@ -184,6 +188,27 @@ function Employees() {
           <option value="Passive">Inaktív</option>
         </select>
       </div>
+
+      {/* JOBB OLDALT A KIEMELT GOMB */}
+      {isLeader && (
+        <button
+          onClick={() => navigate("/leader/create-goal")}
+          style={{
+            padding: "10px 20px",
+            backgroundColor: "#007bff",
+            color: "white",
+            border: "none",
+            borderRadius: "6px",
+            cursor: "pointer",
+            fontSize: "16px",
+            fontWeight: "600",
+            whiteSpace: "nowrap"
+          }}
+        >
+          + Cél létrehozása
+        </button>
+      )}
+    </div>
 
       {/* TÁBLÁZAT */}
       <div
