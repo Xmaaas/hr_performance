@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 function MyGoals() {
   const [assigned, setAssigned] = useState([]);
@@ -7,6 +8,7 @@ function MyGoals() {
   const [editGoal, setEditGoal] = useState(null);
   const [employees, setEmployees] = useState([]);
 
+  const navigate = useNavigate();
   const user = JSON.parse(localStorage.getItem("user"));
 
     useEffect(() => {
@@ -101,7 +103,7 @@ function MyGoals() {
   }
 
   // -----------------------------
-  // LeaderUpdateForm – csak létrehozó leader
+  // LeaderUpdateForm – csak létrehozó leader, lezárt célnál nem jelenik meg
   // -----------------------------
   function LeaderUpdateForm({ goal, onSaved }) {
     const [progress, setProgress] = useState(3);
@@ -109,7 +111,8 @@ function MyGoals() {
 
     if (
       (user.role !== "leader" && user.role !== "admin") ||
-      goal.leader_id !== user.employee_number
+      goal.leader_id !== user.employee_number ||
+      goal.closed_at
     ) {
       return null;
     }
@@ -289,7 +292,21 @@ const renderGoal = (goal, setGoalState) => (
     }}
     onClick={() => toggleGoal(goal.id)}
   >
-    <strong>{goal.name}</strong>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <strong>{goal.name}</strong>
+      {goal.closed_at && (
+        <span style={{
+          padding: "3px 8px",
+          background: "#40c057",
+          color: "white",
+          borderRadius: "6px",
+          fontSize: "12px",
+          fontWeight: "600"
+        }}>
+          Lezárva
+        </span>
+      )}
+    </div>
 
     <div
       style={{
@@ -313,48 +330,66 @@ const renderGoal = (goal, setGoalState) => (
                 onClick={(e) => e.stopPropagation()}
               >
                 <button
-                  onClick={() => setEditGoal(goal)}
+                  onClick={() => navigate(`/leader/goal/${goal.id}`)}
                   style={{
                     padding: "6px 12px",
-                    background: "#228be6",
+                    background: "#40c057",
                     color: "white",
                     border: "none",
                     borderRadius: "6px",
                     cursor: "pointer"
                   }}
                 >
-                  ✏️ Szerkesztés
+                  📋 Részletek / Lezárás
                 </button>
 
-                <button
-                  onClick={async () => {
-                    if (!window.confirm("Biztosan törlöd ezt a célt?")) return;
+                {!goal.closed_at && (
+                  <>
+                    <button
+                      onClick={() => setEditGoal(goal)}
+                      style={{
+                        padding: "6px 12px",
+                        background: "#228be6",
+                        color: "white",
+                        border: "none",
+                        borderRadius: "6px",
+                        cursor: "pointer"
+                      }}
+                    >
+                      ✏️ Szerkesztés
+                    </button>
 
-                    const res = await fetch(`http://localhost:3001/api/goals/${goal.id}`, {
-                      method: "DELETE",
-                      headers: {
-                        Authorization: "Bearer " + localStorage.getItem("token")
-                      }
-                    });
+                    <button
+                      onClick={async () => {
+                        if (!window.confirm("Biztosan törlöd ezt a célt?")) return;
 
-                    const data = await res.json();
+                        const res = await fetch(`http://localhost:3001/api/goals/${goal.id}`, {
+                          method: "DELETE",
+                          headers: {
+                            Authorization: "Bearer " + localStorage.getItem("token")
+                          }
+                        });
 
-                    if (data.success) {
-                      setAssigned(prev => prev.filter(g => g.id !== goal.id));
-                      setCreated(prev => prev.filter(g => g.id !== goal.id));
-                    }
-                  }}
-                  style={{
-                    padding: "6px 12px",
-                    background: "#fa5252",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "6px",
-                    cursor: "pointer"
-                  }}
-                >
-                  🗑️ Törlés
-                </button>
+                        const data = await res.json();
+
+                        if (data.success) {
+                          setAssigned(prev => prev.filter(g => g.id !== goal.id));
+                          setCreated(prev => prev.filter(g => g.id !== goal.id));
+                        }
+                      }}
+                      style={{
+                        padding: "6px 12px",
+                        background: "#fa5252",
+                        color: "white",
+                        border: "none",
+                        borderRadius: "6px",
+                        cursor: "pointer"
+                      }}
+                    >
+                      🗑️ Törlés
+                    </button>
+                  </>
+                )}
               </div>
             )}
           
@@ -395,6 +430,10 @@ const renderGoal = (goal, setGoalState) => (
           <p><strong>Leírás:</strong> {goal.description}</p>
           <p><strong>Prioritás:</strong> {goal.priority}</p>
           <p><strong>Határidő:</strong> {goal.deadline || "Nincs megadva"}</p>
+
+          {goal.closed_at && (
+            <p><strong>Végső értékelés:</strong> {goal.final_score} / 5 — {goal.final_comment || "-"}</p>
+          )}
 
           <LeaderUpdateForm
             goal={goal}
@@ -599,7 +638,7 @@ const EditModal = ({ editGoal, setEditGoal, employees, setAssigned, setCreated }
       <EditModal
         editGoal={editGoal}
         setEditGoal={setEditGoal}
-        employees={employees}   // <-- EZ KELL
+        employees={employees}
         setAssigned={setAssigned}
         setCreated={setCreated}
       />

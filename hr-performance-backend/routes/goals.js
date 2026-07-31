@@ -3,6 +3,7 @@ const router = express.Router();
 const db = require("../db");
 const authMiddleware = require("../middleware/authMiddleware");
 const leaderOrAdmin = require("../middleware/leaderOrAdmin");
+const adminOnly = require("../middleware/adminOnly");
 
 // ---------------------------------------------------------
 // 1) Időközi értékelések automatikus generálása
@@ -54,12 +55,9 @@ const leaderOrAdmin = require("../middleware/leaderOrAdmin");
 }
 
 // ---------------------------------------------------------
-// 2) Timeline összevonása – csak string dátumokkal
+// 2) Timeline összevonása
 // ---------------------------------------------------------
 function mergeTimeline(schedule, updates) {
-  console.log("SCHEDULE:", schedule);
-  console.log("UPDATES:", updates);
-
   return schedule.map(dateStr => {
     const iso = dateStr; // már STRING
 
@@ -176,6 +174,9 @@ router.get("/goals/my", authMiddleware, async (req, res) => {
          g.is_team_goal,
          DATE(g.created_at) AS created_at,
          DATE(g.deadline) AS deadline,
+         DATE(g.closed_at) AS closed_at,
+         g.final_score,
+         g.final_comment,
          g.priority,
          g.progress_frequency,
          g.progress_days,
@@ -197,6 +198,9 @@ router.get("/goals/my", authMiddleware, async (req, res) => {
          g.is_team_goal,
          DATE(g.created_at) AS created_at,
          DATE(g.deadline) AS deadline,
+         DATE(g.closed_at) AS closed_at,
+         g.final_score,
+         g.final_comment,
          g.priority,
          g.progress_frequency,
          g.progress_days,
@@ -259,6 +263,120 @@ router.get("/goals/my", authMiddleware, async (req, res) => {
 });
 
 // ---------------------------------------------------------
+// 5a) ÖSSZES cél áttekintése – csak admin, csak alapadatok
+// ---------------------------------------------------------
+router.get("/goals/all", authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const [goals] = await db.query(
+      `SELECT 
+         g.id,
+         g.name,
+         g.leader_id,
+         e.name AS leader_name,
+         DATE(g.created_at) AS created_at,
+         DATE(g.deadline) AS deadline,
+         DATE(g.closed_at) AS closed_at
+       FROM goals g
+       JOIN employees e ON e.employee_number = g.leader_id
+       ORDER BY g.created_at DESC`
+    );
+
+    // Hozzárendelt dolgozók csatolása minden célhoz (csak név + törzsszám, nem a teljes tartalom)
+    for (const g of goals) {
+      const [assigned] = await db.query(
+        `SELECT ga.employee_number, e.name
+         FROM goal_assignments ga
+         JOIN employees e ON e.employee_number = ga.employee_number
+         WHERE ga.goal_id = ?`,
+        [g.id]
+      );
+      g.assigned = assigned;
+    }
+
+    res.json({ success: true, goals });
+
+  } catch (err) {
+    console.error("GET /goals/all ERROR:", err);
+    res.status(500).json({ success: false, message: "Szerver hiba" });
+  }
+});
+
+// ---------------------------------------------------------
+// 5b) Egy cél részletes adatai (GoalDetails oldalhoz)
+// ---------------------------------------------------------
+router.get("/goals/:id", authMiddleware, async (req, res) => {
+  try {
+    const goalId = req.params.id;
+    const empNum = req.user.employee_number;
+
+    const [rows] = await db.query(
+      `SELECT 
+         g.id, g.leader_id, g.name, g.description, g.is_team_goal,
+         DATE(g.created_at) AS created_at,
+         DATE(g.deadline) AS deadline,
+         DATE(g.closed_at) AS closed_at,
+         g.final_score, g.final_comment,
+         g.priority, g.progress_frequency, g.progress_days,
+         e.name AS leader_name
+       FROM goals g
+       JOIN employees e ON e.employee_number = g.leader_id
+       WHERE g.id = ?`,
+      [goalId]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ success: false, message: "A cél nem található." });
+    }
+
+    const goal = rows[0];
+
+    // Jogosultság: létrehozó leader, hozzárendelt dolgozó, admin, vagy HR (áttekintésre)
+    const [assignedCheck] = await db.query(
+      "SELECT 1 FROM goal_assignments WHERE goal_id = ? AND employee_number = ?",
+      [goalId, empNum]
+    );
+
+    const isOwner = goal.leader_id === empNum;
+    const isAssigned = assignedCheck.length > 0;
+    const isAdmin = req.user.role === "admin";
+    const isHR = req.user.role === "hr";
+
+    if (!isOwner && !isAssigned && !isAdmin && !isHR) {
+      return res.status(403).json({ success: false, message: "Nincs jogosultságod megtekinteni ezt a célt." });
+    }
+
+    const [assignedEmployees] = await db.query(
+      `SELECT ga.employee_number, e.name
+       FROM goal_assignments ga
+       JOIN employees e ON e.employee_number = ga.employee_number
+       WHERE ga.goal_id = ?`,
+      [goalId]
+    );
+    goal.assigned = assignedEmployees;
+
+    const [updates] = await db.query(
+      `SELECT id, goal_id, employee_number, progress, comment,
+              DATE(created_at) AS created_at,
+              DATE(created_real) AS created_real
+       FROM goal_updates
+       WHERE goal_id = ?
+       ORDER BY created_at ASC`,
+      [goalId]
+    );
+    goal.updates = updates;
+
+    const schedule = generateSchedule(goal);
+    goal.timeline = mergeTimeline(schedule, updates);
+
+    res.json({ success: true, goal });
+
+  } catch (err) {
+    console.error("GET /goals/:id ERROR:", err);
+    res.status(500).json({ success: false, message: "Szerver hiba" });
+  }
+});
+
+// ---------------------------------------------------------
 // 6) Leader értékelés hozzáadása – csak létrehozó leader, fix dátum
 // ---------------------------------------------------------
 router.post("/goals/:id/update", authMiddleware, leaderOrAdmin, async (req, res) => {
@@ -267,7 +385,10 @@ router.post("/goals/:id/update", authMiddleware, leaderOrAdmin, async (req, res)
     const employee = req.user.employee_number;
     const { progress, comment } = req.body;
 
-    // 🔧 JAVÍTVA: pontos mezők + DATE() konverzió
+    if (![1, 2, 3, 4, 5].includes(Number(progress))) {
+      return res.status(400).json({ success: false, message: "Az értékelésnek 1 és 5 közötti számnak kell lennie." });
+    }
+
     const [goalRows] = await db.query(
       `SELECT 
          id,
@@ -300,7 +421,14 @@ router.post("/goals/:id/update", authMiddleware, leaderOrAdmin, async (req, res)
       });
     }
 
-    // 🔧 updates: DATE() konverzió
+    // lezárt célhoz nem adható új értékelés
+    if (goalRows[0].closed_at) {
+      return res.status(400).json({
+        success: false,
+        message: "A cél le van zárva, nem adható hozzá új értékelés."
+      });
+    }
+
     const [updates] = await db.query(
       `SELECT 
          id,
@@ -412,7 +540,10 @@ router.put("/goals/:id", authMiddleware, leaderOrAdmin, async (req, res) => {
   try {
     const goalId = req.params.id;
 
-    const [rows] = await db.query("SELECT leader_id FROM goals WHERE id = ?", [goalId]);
+    const [rows] = await db.query(
+      "SELECT leader_id, DATE(closed_at) AS closed_at FROM goals WHERE id = ?",
+      [goalId]
+    );
     if (rows.length === 0) {
       return res.json({ success: false, message: "A cél nem található." });
     }
@@ -421,6 +552,13 @@ router.put("/goals/:id", authMiddleware, leaderOrAdmin, async (req, res) => {
       return res.status(403).json({
         success: false,
         message: "Nincs jogosultságod a cél módosításához."
+      });
+    }
+
+    if (rows[0].closed_at) {
+      return res.status(400).json({
+        success: false,
+        message: "A cél le van zárva, nem módosítható."
       });
     }
 
@@ -453,7 +591,7 @@ router.put("/goals/:id", authMiddleware, leaderOrAdmin, async (req, res) => {
       ]
     );
 
-    // 🔥 ÚJ: hozzárendelt dolgozók frissítése
+    // 🔥 hozzárendelt dolgozók frissítése
     if (Array.isArray(assigned_to)) {
       await db.query("DELETE FROM goal_assignments WHERE goal_id = ?", [goalId]);
 
@@ -480,7 +618,10 @@ router.delete("/goals/:id", authMiddleware, leaderOrAdmin, async (req, res) => {
   try {
     const goalId = req.params.id;
 
-    const [rows] = await db.query("SELECT leader_id FROM goals WHERE id = ?", [goalId]);
+    const [rows] = await db.query(
+      "SELECT leader_id, DATE(closed_at) AS closed_at FROM goals WHERE id = ?",
+      [goalId]
+    );
     if (rows.length === 0) {
       return res.json({ success: false, message: "A cél nem található." });
     }
@@ -492,6 +633,13 @@ router.delete("/goals/:id", authMiddleware, leaderOrAdmin, async (req, res) => {
       });
     }
 
+    if (rows[0].closed_at) {
+      return res.status(400).json({
+        success: false,
+        message: "A cél le van zárva, nem törölhető."
+      });
+    }
+
     await db.query("DELETE FROM goal_updates WHERE goal_id = ?", [goalId]);
     await db.query("DELETE FROM goal_assignments WHERE goal_id = ?", [goalId]);
     await db.query("DELETE FROM goals WHERE id = ?", [goalId]);
@@ -500,6 +648,100 @@ router.delete("/goals/:id", authMiddleware, leaderOrAdmin, async (req, res) => {
 
   } catch (err) {
     console.error("DELETE ERROR:", err);
+    res.status(500).json({ success: false, message: "Szerver hiba" });
+  }
+});
+
+// ---------------------------------------------------------
+// 9) Cél lezárása véglegesítéssel – csak a létrehozó leader vagy admin
+// ---------------------------------------------------------
+router.post("/goals/:id/close", authMiddleware, leaderOrAdmin, async (req, res) => {
+  try {
+    const goalId = req.params.id;
+    const { final_score, final_comment } = req.body;
+
+    const [rows] = await db.query(
+      "SELECT leader_id, DATE(closed_at) AS closed_at FROM goals WHERE id = ?",
+      [goalId]
+    );
+
+    if (rows.length === 0) {
+      return res.json({ success: false, message: "A cél nem található." });
+    }
+
+    if (rows[0].leader_id !== req.user.employee_number && req.user.role !== "admin") {
+      return res.status(403).json({
+        success: false,
+        message: "Nincs jogosultságod a cél lezárásához."
+      });
+    }
+
+    if (rows[0].closed_at) {
+      return res.status(400).json({ success: false, message: "A cél már le van zárva." });
+    }
+
+    const score = Number(final_score);
+    if (!Number.isInteger(score) || score < 1 || score > 5) {
+      return res.status(400).json({
+        success: false,
+        message: "A végső értékelésnek 1 és 5 közötti egész számnak kell lennie."
+      });
+    }
+
+    await db.query(
+      `UPDATE goals 
+       SET closed_at = CURDATE(), final_score = ?, final_comment = ?
+       WHERE id = ?`,
+      [score, final_comment || null, goalId]
+    );
+
+    res.json({ success: true, message: "Cél sikeresen lezárva." });
+
+  } catch (err) {
+    console.error("POST /goals/:id/close ERROR:", err);
+    res.status(500).json({ success: false, message: "Szerver hiba" });
+  }
+});
+
+// ---------------------------------------------------------
+// 10) Cél újranyitása – kizárólag admin, audit naplózással
+// ---------------------------------------------------------
+router.post("/goals/:id/reopen", authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const goalId = req.params.id;
+
+    const [rows] = await db.query(
+      "SELECT id, DATE(closed_at) AS closed_at FROM goals WHERE id = ?",
+      [goalId]
+    );
+
+    if (rows.length === 0) {
+      return res.json({ success: false, message: "A cél nem található." });
+    }
+
+    if (!rows[0].closed_at) {
+      return res.status(400).json({
+        success: false,
+        message: "A cél nincs is lezárva, nem nyitható újra."
+      });
+    }
+
+    await db.query(
+      `UPDATE goals 
+       SET closed_at = NULL, final_score = NULL, final_comment = NULL
+       WHERE id = ?`,
+      [goalId]
+    );
+
+    await db.query(
+      "INSERT INTO audit_log (user_id, action, target_employee_number) VALUES (?, ?, ?)",
+      [req.user.id, `Cél újranyitva (goal_id: ${goalId})`, null]
+    );
+
+    res.json({ success: true, message: "Cél sikeresen újranyitva." });
+
+  } catch (err) {
+    console.error("POST /goals/:id/reopen ERROR:", err);
     res.status(500).json({ success: false, message: "Szerver hiba" });
   }
 });

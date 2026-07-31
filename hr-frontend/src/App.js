@@ -11,7 +11,14 @@ import MyProfile from "./pages/MyProfile";
 import CreateGoal from "./pages/Leader/CreateGoal";
 import MyGoals from "./pages/Leader/MyGoals";
 import ForgotPassword from "./pages/ForgotPassword";
-import GoalDetails from "./pages/Leader/GoalDetails";   // ⬅️ EZT ADD HOZZÁ
+import GoalDetails from "./pages/Leader/GoalDetails";
+import AllGoals from "./pages/Admin/AllGoals";
+import SkillCriteriaAdmin from "./pages/Admin/SkillCriteriaAdmin";
+import SkillGroupsAdmin from "./pages/Admin/SkillGroupsAdmin";
+import SkillPeriodsAdmin from "./pages/Admin/SkillPeriodsAdmin";
+import TeamSkillEvaluations from "./pages/Leader/TeamSkillEvaluations";
+import SkillEvaluationForm from "./pages/Leader/SkillEvaluationForm";
+import EmployeeSkillProfile from "./pages/SkillProfile/EmployeeSkillProfile";
 
 function RoleProtectedRoute({ allowedRoles, children }) {
   const user = JSON.parse(localStorage.getItem("user"));
@@ -77,6 +84,16 @@ function App() {
                 <NavItem to="/create-user" label="Új felhasználó" />
               )}
 
+              {isAdmin && <NavItem to="/admin/goals" label="Összes cél" />}
+
+              {(isLeader || isAdmin) && (
+                <NavItem to="/leader/skill-evaluations" label="Csapat skill értékelés" />
+              )}
+
+              {(isAdmin || isHR) && <NavItem to="/admin/skill-criteria" label="Skill szempontok" />}
+              {(isAdmin || isHR) && <NavItem to="/admin/skill-groups" label="Skill csoportok" />}
+              {(isAdmin || isHR) && <NavItem to="/admin/skill-periods" label="Skill időszakok" />}
+
               {isAdmin && <NavItem to="/audit-log" label="Audit napló" />}
 
               <button
@@ -99,13 +116,10 @@ function App() {
 
         {/* ROUTES */}
         <Routes>
-          {/* Jelszó reset – EZT KELL ELŐRE TENNI */}
           <Route path="/reset-password/:token" element={<ResetPassword />} />
-
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/login" element={<Login onLogin={handleLogin} />} />
 
-          {/* LEADER: Új cél létrehozása */}
           <Route
             path="/leader/create-goal"
             element={
@@ -117,18 +131,89 @@ function App() {
             }
           />
 
-          {/* ⬇️⬇️⬇️ HIÁNYZÓ ROUTE – MOSTANTÓL MŰKÖDIK ⬇️⬇️⬇️ */}
           <Route
             path="/leader/goal/:id"
             element={
               <ProtectedRoute>
-                <RoleProtectedRoute allowedRoles={["leader", "admin"]}>
-                  <GoalDetails />
+                <GoalDetails />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/admin/goals"
+            element={
+              <ProtectedRoute>
+                <RoleProtectedRoute allowedRoles={["admin"]}>
+                  <AllGoals />
                 </RoleProtectedRoute>
               </ProtectedRoute>
             }
           />
-          {/* ⬆️⬆️⬆️ EZ OLDJA MEG A HIBÁT ⬆️⬆️⬆️ */}
+
+          <Route
+            path="/admin/skill-criteria"
+            element={
+              <ProtectedRoute>
+                <RoleProtectedRoute allowedRoles={["admin", "hr"]}>
+                  <SkillCriteriaAdmin />
+                </RoleProtectedRoute>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/admin/skill-groups"
+            element={
+              <ProtectedRoute>
+                <RoleProtectedRoute allowedRoles={["admin", "hr"]}>
+                  <SkillGroupsAdmin />
+                </RoleProtectedRoute>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/admin/skill-periods"
+            element={
+              <ProtectedRoute>
+                <RoleProtectedRoute allowedRoles={["admin", "hr"]}>
+                  <SkillPeriodsAdmin />
+                </RoleProtectedRoute>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/leader/skill-evaluations"
+            element={
+              <ProtectedRoute>
+                <RoleProtectedRoute allowedRoles={["leader", "admin"]}>
+                  <TeamSkillEvaluations />
+                </RoleProtectedRoute>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/leader/skill-evaluations/:id"
+            element={
+              <ProtectedRoute>
+                <SkillEvaluationForm />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Dolgozói skill-profil – jogosultságot a backend dönti el
+              (saját maga / jelenlegi vezetője / HR / admin) */}
+          <Route
+            path="/skills/profile/:employee_number"
+            element={
+              <ProtectedRoute>
+                <EmployeeSkillProfile />
+              </ProtectedRoute>
+            }
+          />
 
           <Route
             path="/my-goals"
@@ -170,7 +255,6 @@ function App() {
             }
           />
 
-          {/* EZ LEGYEN A LEGALJÁN! */}
           <Route path="/" element={<Navigate to="/me" replace />} />
         </Routes>
 

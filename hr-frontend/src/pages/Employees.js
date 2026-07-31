@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 function Employees() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [employees, setEmployees] = useState([]);
-  const [openMenu, setOpenMenu] = useState(null); // 🔥 lenyitható menü
+  const [openMenu, setOpenMenu] = useState(null);
   const [filters, setFilters] = useState({
     department: "",
     employee_number: "",
@@ -151,7 +151,6 @@ function Employees() {
           gap: "1rem"
         }}
       >
-      {/* SZŰRŐK BAL OLDALT */}
       <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
         <select
           value={filters.department}
@@ -189,7 +188,6 @@ function Employees() {
         </select>
       </div>
 
-      {/* JOBB OLDALT A KIEMELT GOMB */}
       {isLeader && (
         <button
           onClick={() => navigate("/leader/create-goal")}
@@ -230,6 +228,7 @@ function Employees() {
               <th style={thStyle}>Státusz</th>
               <th style={thStyle}>Felvétel</th>
               <th style={thStyle}>Szerepkör</th>
+              <th style={thStyle}>Skill-profil</th>
               {(isAdmin || isHR) && <th style={thStyle}>Műveletek</th>}
             </tr>
           </thead>
@@ -251,6 +250,23 @@ function Employees() {
                 <td style={tdStyle}>{emp.status}</td>
                 <td style={tdStyle}>{emp.hire}</td>
                 <td style={tdStyle}>{emp.role}</td>
+
+                <td style={tdStyle}>
+                  <button
+                    onClick={() => navigate(`/skills/profile/${emp.employee_number}`)}
+                    style={{
+                      padding: "6px 12px",
+                      background: "#4C6EF5",
+                      color: "white",
+                      border: "none",
+                      borderRadius: "6px",
+                      cursor: "pointer",
+                      fontSize: "13px"
+                    }}
+                  >
+                    Megtekintés
+                  </button>
+                </td>
 
                 {(isAdmin || isHR) && (
                   <td style={{ ...tdStyle, position: "relative" }}>

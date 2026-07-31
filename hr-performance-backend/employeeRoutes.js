@@ -9,7 +9,7 @@ const adminOrHR = require('./middleware/adminOrHR');
 
 
 // ------------------------------------------------------
-//  EXCEL FELTÖLTÉS – Role + LeaderId beolvasással (FK-biztos verzió)
+//  EXCEL FELTÖLTÉS – Role + LeaderId beolvasással
 // ------------------------------------------------------
 router.post('/upload', authMiddleware, adminOrHR, upload.single('file'), async (req, res) => {
   try {

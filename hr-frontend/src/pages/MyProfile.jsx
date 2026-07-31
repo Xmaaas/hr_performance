@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 function MyProfile() {
   const [data, setData] = useState(null);
   const token = localStorage.getItem("token");
+  const navigate = useNavigate();
 
   useEffect(() => {
     fetch("http://localhost:3001/api/employees/me", {
@@ -82,6 +84,23 @@ function MyProfile() {
           <InfoRow label="Belépés dátuma" value={data.hire} />
           <InfoRow label="Fizetés" value={data.salary + " EUR"} />
         </div>
+
+        <button
+          onClick={() => navigate(`/skills/profile/${data.employee_number}`)}
+          style={{
+            marginTop: "20px",
+            width: "100%",
+            padding: "10px",
+            background: "#4C6EF5",
+            color: "white",
+            border: "none",
+            borderRadius: "8px",
+            cursor: "pointer",
+            fontWeight: "600"
+          }}
+        >
+          📊 Skill-profilom megtekintése
+        </button>
       </div>
     </div>
   );
