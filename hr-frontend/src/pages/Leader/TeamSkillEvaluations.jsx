@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../../config';
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -11,7 +12,7 @@ function TeamSkillEvaluations() {
   const token = localStorage.getItem("token");
 
   useEffect(() => {
-    fetch("http://localhost:3001/api/skills/periods/open", {
+    fetch(`${API_BASE_URL}/skills/periods/open`, {
       headers: { Authorization: `Bearer ${token}` }
     })
       .then(res => res.json())
@@ -30,7 +31,7 @@ function TeamSkillEvaluations() {
     if (!selectedPeriod) return;
 
     setLoading(true);
-    fetch(`http://localhost:3001/api/skills/evaluations/my-team?period_id=${selectedPeriod}`, {
+    fetch(`${API_BASE_URL}/skills/evaluations/my-team?period_id=${selectedPeriod}`, {
       headers: { Authorization: `Bearer ${token}` }
     })
       .then(res => res.json())

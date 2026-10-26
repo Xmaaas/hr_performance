@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../../config';
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 
@@ -17,7 +18,7 @@ export default function SkillEvaluationForm() {
 
   const loadEvaluation = () => {
     setLoading(true);
-    fetch(`http://localhost:3001/api/skills/evaluations/${id}`, {
+    fetch(`${API_BASE_URL}/skills/evaluations/${id}`, {
       headers: { Authorization: `Bearer ${token}` }
     })
       .then(async res => {
@@ -66,7 +67,7 @@ export default function SkillEvaluationForm() {
   const save = async (submit) => {
     setSaving(true);
     try {
-      const res = await fetch(`http://localhost:3001/api/skills/evaluations/${id}`, {
+      const res = await fetch(`${API_BASE_URL}/skills/evaluations/${id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",

@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../../config';
 import { useEffect, useState } from "react";
 
 function SkillCriteriaAdmin() {
@@ -11,7 +12,7 @@ function SkillCriteriaAdmin() {
 
   const loadCriteria = () => {
     setLoading(true);
-    fetch("http://localhost:3001/api/skills/criteria", {
+    fetch(`${API_BASE_URL}/skills/criteria`, {
       headers: { Authorization: `Bearer ${token}` }
     })
       .then(res => res.json())
@@ -29,7 +30,7 @@ function SkillCriteriaAdmin() {
   const addCriteria = async () => {
     if (!newLabel.trim()) return alert("A szempont neve kötelező.");
 
-    const res = await fetch("http://localhost:3001/api/skills/criteria", {
+    const res = await fetch(`${API_BASE_URL}/skills/criteria`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -53,7 +54,7 @@ function SkillCriteriaAdmin() {
   };
 
   const toggleActive = async (item) => {
-    const res = await fetch(`http://localhost:3001/api/skills/criteria/${item.id}`, {
+    const res = await fetch(`${API_BASE_URL}/skills/criteria/${item.id}`, {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",

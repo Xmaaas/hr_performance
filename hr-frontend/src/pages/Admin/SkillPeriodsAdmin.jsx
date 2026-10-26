@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../../config';
 import { useEffect, useState } from "react";
 
 function SkillPeriodsAdmin() {
@@ -13,7 +14,7 @@ function SkillPeriodsAdmin() {
 
   const loadPeriods = () => {
     setLoading(true);
-    fetch("http://localhost:3001/api/skills/periods", {
+    fetch(`${API_BASE_URL}/skills/periods`, {
       headers: { Authorization: `Bearer ${token}` }
     })
       .then(res => res.json())
@@ -35,7 +36,7 @@ function SkillPeriodsAdmin() {
 
     setCreating(true);
     try {
-      const res = await fetch("http://localhost:3001/api/skills/periods", {
+      const res = await fetch(`${API_BASE_URL}/skills/periods`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -65,7 +66,7 @@ function SkillPeriodsAdmin() {
   const closePeriod = async (id) => {
     if (!window.confirm("Biztosan lezárod ezt az időszakot? Utána a leaderek nem tudják tovább szerkeszteni az értékeléseket.")) return;
 
-    const res = await fetch(`http://localhost:3001/api/skills/periods/${id}/close`, {
+    const res = await fetch(`${API_BASE_URL}/skills/periods/${id}/close`, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}` }
     });

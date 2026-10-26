@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../../config';
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
@@ -46,7 +47,7 @@ export default function GoalDetails() {
 
   const loadGoal = () => {
     setLoading(true);
-    fetch(`http://localhost:3001/api/goals/${id}`, {
+    fetch(`${API_BASE_URL}/goals/${id}`, {
       headers: { Authorization: `Bearer ${token}` }
     })
       .then(async res => {
@@ -73,7 +74,7 @@ export default function GoalDetails() {
 
     setClosing(true);
     try {
-      const res = await fetch(`http://localhost:3001/api/goals/${id}/close`, {
+      const res = await fetch(`${API_BASE_URL}/goals/${id}/close`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -104,7 +105,7 @@ export default function GoalDetails() {
 
     setReopening(true);
     try {
-      const res = await fetch(`http://localhost:3001/api/goals/${id}/reopen`, {
+      const res = await fetch(`${API_BASE_URL}/goals/${id}/reopen`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

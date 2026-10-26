@@ -70,8 +70,27 @@ router.put("/skills/criteria/:id", authMiddleware, adminOrHR, async (req, res) =
 router.delete("/skills/criteria/:id", authMiddleware, adminOrHR, async (req, res) => {
   try {
     const { id } = req.params;
-    await db.query("UPDATE skill_criteria SET active = 0 WHERE id = ?", [id]);
-    res.json({ success: true, message: "Szempont inaktiválva." });
+
+    const [existing] = await db.query("SELECT id FROM skill_criteria WHERE id = ?", [id]);
+    if (existing.length === 0) {
+      return res.status(404).json({ success: false, message: "A szempont nem található." });
+    }
+
+    const [usage] = await db.query(
+      "SELECT COUNT(*) AS cnt FROM skill_evaluation_scores WHERE general_criteria_id = ?",
+      [id]
+    );
+
+    if (usage[0].cnt > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Ez a szempont már használatban van ${usage[0].cnt} (régi típusú) értékelésben, ezért nem törölhető véglegesen. Inaktiváld helyette.`
+      });
+    }
+
+    await db.query("DELETE FROM skill_criteria WHERE id = ?", [id]);
+
+    res.json({ success: true, message: "Szempont véglegesen törölve." });
   } catch (err) {
     console.error("DELETE /skills/criteria/:id ERROR:", err);
     res.status(500).json({ success: false, message: "Szerver hiba" });
@@ -158,6 +177,52 @@ router.put("/skills/groups/:id", authMiddleware, adminOrHR, async (req, res) => 
   }
 });
 
+router.delete("/skills/groups/:id", authMiddleware, adminOrHR, async (req, res) => {
+  const conn = await db.getConnection();
+
+  try {
+    const { id } = req.params;
+
+    const [existing] = await conn.query("SELECT id, name FROM skill_groups WHERE id = ?", [id]);
+    if (existing.length === 0) {
+      conn.release();
+      return res.status(404).json({ success: false, message: "A csoport nem található." });
+    }
+
+    const [usage] = await conn.query(
+      `SELECT COUNT(*) AS cnt
+       FROM skill_evaluation_scores ses
+       JOIN skill_group_criteria sgc ON sgc.id = ses.group_criteria_id
+       WHERE sgc.group_id = ?`,
+      [id]
+    );
+
+    if (usage[0].cnt > 0) {
+      conn.release();
+      return res.status(400).json({
+        success: false,
+        message: `A(z) "${existing[0].name}" csoport szempontjai már használatban vannak ${usage[0].cnt} (régi típusú) értékelésben, ezért nem törölhető véglegesen. Inaktiváld helyette.`
+      });
+    }
+
+    await conn.beginTransaction();
+
+    await conn.query("DELETE FROM skill_group_criteria WHERE group_id = ?", [id]);
+    await conn.query("DELETE FROM skill_group_members WHERE group_id = ?", [id]);
+    await conn.query("DELETE FROM skill_groups WHERE id = ?", [id]);
+
+    await conn.commit();
+
+    res.json({ success: true, message: "Csoport véglegesen törölve." });
+  } catch (err) {
+    await conn.rollback();
+    console.error("DELETE /skills/groups/:id ERROR:", err);
+    res.status(500).json({ success: false, message: "Szerver hiba" });
+  } finally {
+    conn.release();
+  }
+});
+
 router.post("/skills/groups/:id/members", authMiddleware, adminOrHR, async (req, res) => {
   try {
     const { id } = req.params;
@@ -228,8 +293,27 @@ router.post("/skills/groups/:id/criteria", authMiddleware, adminOrHR, async (req
 router.delete("/skills/groups/:groupId/criteria/:criteriaId", authMiddleware, adminOrHR, async (req, res) => {
   try {
     const { criteriaId } = req.params;
-    await db.query("UPDATE skill_group_criteria SET active = 0 WHERE id = ?", [criteriaId]);
-    res.json({ success: true, message: "Szempont inaktiválva." });
+
+    const [existing] = await db.query("SELECT id FROM skill_group_criteria WHERE id = ?", [criteriaId]);
+    if (existing.length === 0) {
+      return res.status(404).json({ success: false, message: "A szempont nem található." });
+    }
+
+    const [usage] = await db.query(
+      "SELECT COUNT(*) AS cnt FROM skill_evaluation_scores WHERE group_criteria_id = ?",
+      [criteriaId]
+    );
+
+    if (usage[0].cnt > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Ez a szempont már használatban van ${usage[0].cnt} (régi típusú) értékelésben, ezért nem törölhető véglegesen. Inaktiváld helyette.`
+      });
+    }
+
+    await db.query("DELETE FROM skill_group_criteria WHERE id = ?", [criteriaId]);
+
+    res.json({ success: true, message: "Szempont véglegesen törölve." });
   } catch (err) {
     console.error("DELETE /skills/groups/:groupId/criteria/:criteriaId ERROR:", err);
     res.status(500).json({ success: false, message: "Szerver hiba" });
@@ -238,6 +322,7 @@ router.delete("/skills/groups/:groupId/criteria/:criteriaId", authMiddleware, ad
 
 // ===========================================================
 // IDŐSZAKOK (skill_periods) + automatikus evaluation-generálás
+// + szempont-pillanatkép (snapshot) generálása
 // ===========================================================
 
 router.get("/skills/periods", authMiddleware, adminOrHR, async (req, res) => {
@@ -301,8 +386,60 @@ router.post("/skills/periods", authMiddleware, adminOrHR, async (req, res) => {
        VALUES (?, ?, ?, 'open', ?)`,
       [label.trim(), start_date, end_date, req.user.id]
     );
-
     const periodId = periodResult.insertId;
+
+    const [generalCriteria] = await conn.query(
+      `SELECT id, label, description FROM skill_criteria WHERE active = 1`
+    );
+
+    const generalSnapshotMap = new Map();
+
+    for (const c of generalCriteria) {
+      const [snapResult] = await conn.query(
+        `INSERT INTO skill_period_criteria_snapshot
+           (period_id, source_type, source_criteria_id, label, description, group_id, group_name)
+         VALUES (?, 'general', ?, ?, ?, NULL, NULL)`,
+        [periodId, c.id, c.label, c.description]
+      );
+      generalSnapshotMap.set(c.id, snapResult.insertId);
+    }
+
+    const [groupCriteria] = await conn.query(
+      `SELECT sgc.id, sgc.label, sgc.description, sg.id AS group_id, sg.name AS group_name
+       FROM skill_group_criteria sgc
+       JOIN skill_groups sg ON sg.id = sgc.group_id AND sg.active = 1
+       WHERE sgc.active = 1`
+    );
+
+    const groupSnapshotMap = new Map();
+
+    for (const c of groupCriteria) {
+      const [snapResult] = await conn.query(
+        `INSERT INTO skill_period_criteria_snapshot
+           (period_id, source_type, source_criteria_id, label, description, group_id, group_name)
+         VALUES (?, 'group', ?, ?, ?, ?, ?)`,
+        [periodId, c.id, c.label, c.description, c.group_id, c.group_name]
+      );
+
+      if (!groupSnapshotMap.has(c.group_id)) {
+        groupSnapshotMap.set(c.group_id, []);
+      }
+      groupSnapshotMap.get(c.group_id).push(snapResult.insertId);
+    }
+
+    const [allMembers] = await conn.query(
+      `SELECT sgm.group_id, sgm.employee_number
+       FROM skill_group_members sgm
+       JOIN skill_groups sg ON sg.id = sgm.group_id AND sg.active = 1`
+    );
+
+    const employeeGroupsMap = new Map();
+    for (const m of allMembers) {
+      if (!employeeGroupsMap.has(m.employee_number)) {
+        employeeGroupsMap.set(m.employee_number, []);
+      }
+      employeeGroupsMap.get(m.employee_number).push(m.group_id);
+    }
 
     const [employees] = await conn.query(
       `SELECT employee_number, leader_id
@@ -311,18 +448,39 @@ router.post("/skills/periods", authMiddleware, adminOrHR, async (req, res) => {
     );
 
     for (const emp of employees) {
-      await conn.query(
+      const [evalResult] = await conn.query(
         `INSERT INTO skill_evaluations (period_id, employee_number, leader_id, status)
          VALUES (?, ?, ?, 'pending')`,
         [periodId, emp.employee_number, emp.leader_id]
       );
+      const evaluationId = evalResult.insertId;
+
+      for (const snapshotId of generalSnapshotMap.values()) {
+        await conn.query(
+          `INSERT INTO skill_evaluation_criteria (evaluation_id, snapshot_criteria_id)
+           VALUES (?, ?)`,
+          [evaluationId, snapshotId]
+        );
+      }
+
+      const empGroupIds = employeeGroupsMap.get(emp.employee_number) || [];
+      for (const groupId of empGroupIds) {
+        const snapshotIds = groupSnapshotMap.get(groupId) || [];
+        for (const snapshotId of snapshotIds) {
+          await conn.query(
+            `INSERT INTO skill_evaluation_criteria (evaluation_id, snapshot_criteria_id)
+             VALUES (?, ?)`,
+            [evaluationId, snapshotId]
+          );
+        }
+      }
     }
 
     await conn.commit();
 
     res.json({
       success: true,
-      message: `Időszak megnyitva, ${employees.length} értékelés előkészítve.`,
+      message: `Időszak megnyitva, ${employees.length} értékelés előkészítve (${generalSnapshotMap.size} általános szempont, ${groupCriteria.length} csoport-szempont befagyasztva).`,
       period_id: periodId,
       generated_count: employees.length
     });
@@ -389,6 +547,8 @@ router.get("/skills/evaluations/my-team", authMiddleware, leaderOrAdmin, async (
   }
 });
 
+// Egy konkrét értékelés részletei – snapshot-alapú időszaknál a befagyasztott
+// szempontlistát adja vissza, régi (snapshot nélküli) időszaknál az élő táblákból dolgozik
 router.get("/skills/evaluations/:id", authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
@@ -420,35 +580,83 @@ router.get("/skills/evaluations/:id", authMiddleware, async (req, res) => {
       return res.status(403).json({ success: false, message: "Nincs jogosultságod megtekinteni ezt az értékelést." });
     }
 
-    const [generalCriteria] = await db.query(
-      `SELECT 
-         sc.id, sc.label, sc.description,
-         ses.score, ses.comment
-       FROM skill_criteria sc
-       LEFT JOIN skill_evaluation_scores ses
-         ON ses.general_criteria_id = sc.id AND ses.evaluation_id = ?
-       WHERE sc.active = 1
-       ORDER BY sc.sort_order ASC, sc.label ASC`,
+    // Eldöntjük, hogy ez az értékelés snapshot-alapú-e
+    const [snapshotCheck] = await db.query(
+      "SELECT COUNT(*) AS cnt FROM skill_evaluation_criteria WHERE evaluation_id = ?",
       [id]
     );
+    const isSnapshotBased = snapshotCheck[0].cnt > 0;
 
-    const [groupCriteria] = await db.query(
-      `SELECT 
-         sgc.id, sgc.label, sgc.description,
-         sg.id AS group_id, sg.name AS group_name,
-         ses.score, ses.comment
-       FROM skill_group_members sgm
-       JOIN skill_groups sg ON sg.id = sgm.group_id AND sg.active = 1
-       JOIN skill_group_criteria sgc ON sgc.group_id = sg.id AND sgc.active = 1
-       LEFT JOIN skill_evaluation_scores ses
-         ON ses.group_criteria_id = sgc.id AND ses.evaluation_id = ?
-       WHERE sgm.employee_number = ?
-       ORDER BY sg.name ASC, sgc.label ASC`,
-      [id, evaluation.employee_number]
-    );
+    let generalCriteria = [];
+    let groupCriteria = [];
+
+    if (isSnapshotBased) {
+      // --- SNAPSHOT-ALAPÚ (befagyasztott) szempontlista ---
+      const [rows] = await db.query(
+        `SELECT 
+           spcs.id, spcs.label, spcs.description, spcs.source_type,
+           spcs.group_id, spcs.group_name,
+           ses.score, ses.comment
+         FROM skill_evaluation_criteria sec
+         JOIN skill_period_criteria_snapshot spcs ON spcs.id = sec.snapshot_criteria_id
+         LEFT JOIN skill_evaluation_scores ses
+           ON ses.snapshot_criteria_id = spcs.id AND ses.evaluation_id = sec.evaluation_id
+         WHERE sec.evaluation_id = ?
+         ORDER BY spcs.source_type ASC, spcs.group_name ASC, spcs.label ASC`,
+        [id]
+      );
+
+      generalCriteria = rows
+        .filter(r => r.source_type === "general")
+        .map(r => ({ id: r.id, label: r.label, description: r.description, score: r.score, comment: r.comment }));
+
+      groupCriteria = rows
+        .filter(r => r.source_type === "group")
+        .map(r => ({
+          id: r.id,
+          label: r.label,
+          description: r.description,
+          group_id: r.group_id,
+          group_name: r.group_name,
+          score: r.score,
+          comment: r.comment
+        }));
+
+    } else {
+      // --- RÉGI, ÉLŐ TÁBLÁKBÓL OLVASOTT szempontlista (snapshot nélküli időszak) ---
+      const [general] = await db.query(
+        `SELECT 
+           sc.id, sc.label, sc.description,
+           ses.score, ses.comment
+         FROM skill_criteria sc
+         LEFT JOIN skill_evaluation_scores ses
+           ON ses.general_criteria_id = sc.id AND ses.evaluation_id = ?
+         WHERE sc.active = 1
+         ORDER BY sc.sort_order ASC, sc.label ASC`,
+        [id]
+      );
+      generalCriteria = general;
+
+      const [group] = await db.query(
+        `SELECT 
+           sgc.id, sgc.label, sgc.description,
+           sg.id AS group_id, sg.name AS group_name,
+           ses.score, ses.comment
+         FROM skill_group_members sgm
+         JOIN skill_groups sg ON sg.id = sgm.group_id AND sg.active = 1
+         JOIN skill_group_criteria sgc ON sgc.group_id = sg.id AND sgc.active = 1
+         LEFT JOIN skill_evaluation_scores ses
+           ON ses.group_criteria_id = sgc.id AND ses.evaluation_id = ?
+         WHERE sgm.employee_number = ?
+         ORDER BY sg.name ASC, sgc.label ASC`,
+        [id, evaluation.employee_number]
+      );
+      groupCriteria = group;
+    }
 
     evaluation.general_criteria = generalCriteria;
     evaluation.group_criteria = groupCriteria;
+    evaluation.is_snapshot_based = isSnapshotBased;
 
     res.json({ success: true, evaluation });
 
@@ -458,6 +666,8 @@ router.get("/skills/evaluations/:id", authMiddleware, async (req, res) => {
   }
 });
 
+// Pontszámok mentése – snapshot-alapú időszaknál a snapshot_criteria_id oszlopba ment,
+// régi (snapshot nélküli) időszaknál a korábbi logika szerint
 router.put("/skills/evaluations/:id", authMiddleware, leaderOrAdmin, async (req, res) => {
   const conn = await db.getConnection();
 
@@ -511,12 +721,27 @@ router.put("/skills/evaluations/:id", authMiddleware, leaderOrAdmin, async (req,
       }
     }
 
+    // Eldöntjük, hogy snapshot-alapú-e ez az értékelés
+    const [snapshotCheck] = await conn.query(
+      "SELECT COUNT(*) AS cnt FROM skill_evaluation_criteria WHERE evaluation_id = ?",
+      [id]
+    );
+    const isSnapshotBased = snapshotCheck[0].cnt > 0;
+
     await conn.beginTransaction();
 
     await conn.query("DELETE FROM skill_evaluation_scores WHERE evaluation_id = ?", [id]);
 
     for (const s of allScores) {
-      if (s.type === "general") {
+      if (isSnapshotBased) {
+        // Snapshot-alapú: minden pontszám a snapshot_criteria_id oszlopba kerül,
+        // típustól (general/group) függetlenül, mert a snapshot-sor id-ja már egyértelmű.
+        await conn.query(
+          `INSERT INTO skill_evaluation_scores (evaluation_id, snapshot_criteria_id, score, comment)
+           VALUES (?, ?, ?, ?)`,
+          [id, s.criteria_id, s.score, s.comment || null]
+        );
+      } else if (s.type === "general") {
         await conn.query(
           `INSERT INTO skill_evaluation_scores (evaluation_id, general_criteria_id, score, comment)
            VALUES (?, ?, ?, ?)`,
@@ -558,7 +783,6 @@ router.put("/skills/evaluations/:id", authMiddleware, leaderOrAdmin, async (req,
 // DOLGOZÓI SKILL-PROFIL (radar chart + csoport-pontok)
 // ===========================================================
 
-// Segédfüggvény: jogosult-e a hívó megtekinteni a célzott dolgozó profilját
 async function canViewSkillProfile(req, targetEmployeeNumber) {
   if (req.user.role === "admin" || req.user.role === "hr") return true;
   if (req.user.employee_number === targetEmployeeNumber) return true;
@@ -572,7 +796,6 @@ async function canViewSkillProfile(req, targetEmployeeNumber) {
   return rows[0].leader_id === req.user.employee_number;
 }
 
-// Azon időszakok listája, amikhez van BEKÜLDÖTT értékelés az adott dolgozóra
 router.get("/skills/employee/:employee_number/periods", authMiddleware, async (req, res) => {
   try {
     const { employee_number } = req.params;
@@ -598,7 +821,6 @@ router.get("/skills/employee/:employee_number/periods", authMiddleware, async (r
   }
 });
 
-// Egy adott időszak beküldött értékelése – radar chart + csoport-pontok adatai
 router.get("/skills/employee/:employee_number/evaluation", authMiddleware, async (req, res) => {
   try {
     const { employee_number } = req.params;
@@ -627,24 +849,56 @@ router.get("/skills/employee/:employee_number/evaluation", authMiddleware, async
 
     const evaluation = evalRows[0];
 
-    const [generalScores] = await db.query(
-      `SELECT sc.label, ses.score, ses.comment
-       FROM skill_evaluation_scores ses
-       JOIN skill_criteria sc ON sc.id = ses.general_criteria_id
-       WHERE ses.evaluation_id = ?
-       ORDER BY sc.sort_order ASC, sc.label ASC`,
+    // Eldöntjük, hogy ez az értékelés snapshot-alapú-e
+    const [snapshotCheck] = await db.query(
+      "SELECT COUNT(*) AS cnt FROM skill_evaluation_criteria WHERE evaluation_id = ?",
       [evaluation.id]
     );
+    const isSnapshotBased = snapshotCheck[0].cnt > 0;
 
-    const [groupScores] = await db.query(
-      `SELECT sg.name AS group_name, sgc.label, ses.score, ses.comment
-       FROM skill_evaluation_scores ses
-       JOIN skill_group_criteria sgc ON sgc.id = ses.group_criteria_id
-       JOIN skill_groups sg ON sg.id = sgc.group_id
-       WHERE ses.evaluation_id = ?
-       ORDER BY sg.name ASC, sgc.label ASC`,
-      [evaluation.id]
-    );
+    let generalScores = [];
+    let groupScores = [];
+
+    if (isSnapshotBased) {
+      const [rows] = await db.query(
+        `SELECT spcs.source_type, spcs.label, spcs.group_name, ses.score, ses.comment
+         FROM skill_evaluation_scores ses
+         JOIN skill_period_criteria_snapshot spcs ON spcs.id = ses.snapshot_criteria_id
+         WHERE ses.evaluation_id = ?
+         ORDER BY spcs.source_type ASC, spcs.group_name ASC, spcs.label ASC`,
+        [evaluation.id]
+      );
+
+      generalScores = rows
+        .filter(r => r.source_type === "general")
+        .map(r => ({ label: r.label, score: r.score, comment: r.comment }));
+
+      groupScores = rows
+        .filter(r => r.source_type === "group")
+        .map(r => ({ group_name: r.group_name, label: r.label, score: r.score, comment: r.comment }));
+
+    } else {
+      const [general] = await db.query(
+        `SELECT sc.label, ses.score, ses.comment
+         FROM skill_evaluation_scores ses
+         JOIN skill_criteria sc ON sc.id = ses.general_criteria_id
+         WHERE ses.evaluation_id = ?
+         ORDER BY sc.sort_order ASC, sc.label ASC`,
+        [evaluation.id]
+      );
+      generalScores = general;
+
+      const [group] = await db.query(
+        `SELECT sg.name AS group_name, sgc.label, ses.score, ses.comment
+         FROM skill_evaluation_scores ses
+         JOIN skill_group_criteria sgc ON sgc.id = ses.group_criteria_id
+         JOIN skill_groups sg ON sg.id = sgc.group_id
+         WHERE ses.evaluation_id = ?
+         ORDER BY sg.name ASC, sgc.label ASC`,
+        [evaluation.id]
+      );
+      groupScores = group;
+    }
 
     res.json({
       success: true,

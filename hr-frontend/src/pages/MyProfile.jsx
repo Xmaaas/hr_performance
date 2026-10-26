@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../config';
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -7,7 +8,7 @@ function MyProfile() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    fetch("http://localhost:3001/api/employees/me", {
+    fetch(`${API_BASE_URL}/employees/me`, {
       headers: {
         Authorization: `Bearer ${token}`
       }

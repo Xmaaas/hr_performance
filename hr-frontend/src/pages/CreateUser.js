@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../config';
 import { useState } from "react";
 
 function CreateUser() {
@@ -7,7 +8,7 @@ function CreateUser() {
   const [message, setMessage] = useState("");
 
   const handleCreate = async () => {
-    const res = await fetch("http://localhost:3001/api/create-user", {
+    const res = await fetch(`${API_BASE_URL}/create-user`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

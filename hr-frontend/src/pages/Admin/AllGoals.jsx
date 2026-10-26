@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../../config';
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -15,7 +16,7 @@ function AllGoals() {
   const token = localStorage.getItem("token");
 
   useEffect(() => {
-    fetch("http://localhost:3001/api/goals/all", {
+    fetch(`${API_BASE_URL}/goals/all`, {
       headers: { Authorization: `Bearer ${token}` }
     })
       .then(async res => {

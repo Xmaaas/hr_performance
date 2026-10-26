@@ -6,10 +6,10 @@ const db = require("../db");
 const { randomBytes } = require("crypto");
 const sendEmail = require("../utils/sendEmail");
 
-// 🔐 JWT secret – érdemes .env-ből olvasni
+// JWT secret – érdemes .env-ből olvasni
 const JWT_SECRET = process.env.JWT_SECRET || "secretkey";
 
-// 🔵 LOGIN
+// LOGIN
 router.post("/login", async (req, res) => {
   const { email, password } = req.body;
 
@@ -70,7 +70,7 @@ router.post("/login", async (req, res) => {
   }
 });
 
-// 🔵 Elfelejtett jelszó – email küldés
+// Elfelejtett jelszó – email küldés
 router.post("/forgot-password", async (req, res) => {
   const { email } = req.body;
 
@@ -120,7 +120,7 @@ router.post("/forgot-password", async (req, res) => {
   }
 });
 
-// 🔵 Új jelszó beállítása – token + új jelszó
+// Új jelszó beállítása – token + új jelszó
 router.post("/reset-password", async (req, res) => {
   const { token, password } = req.body;
 

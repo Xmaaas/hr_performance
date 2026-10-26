@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../config';
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -22,7 +23,7 @@ function Employees() {
   useEffect(() => {
     if (!user) return;
 
-    fetch("http://localhost:3001/api/employees", {
+    fetch(`${API_BASE_URL}/employees`, {
       headers: { Authorization: `Bearer ${token}` }
     })
       .then(res => res.json())
@@ -35,7 +36,7 @@ function Employees() {
     const formData = new FormData();
     formData.append("file", selectedFile);
 
-    const res = await fetch("http://localhost:3001/api/employees/upload", {
+    const res = await fetch(`${API_BASE_URL}/employees/upload`, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}` },
       body: formData
@@ -44,7 +45,7 @@ function Employees() {
     const data = await res.json();
     alert(data.message);
 
-    fetch("http://localhost:3001/api/employees", {
+    fetch(`${API_BASE_URL}/employees`, {
       headers: { Authorization: `Bearer ${token}` }
     })
       .then(res => res.json())
@@ -55,7 +56,7 @@ function Employees() {
     const newStatus = emp.status === "Active" ? "Passive" : "Active";
 
     const res = await fetch(
-      `http://localhost:3001/api/employees/status/${emp.employee_number}`,
+      `${API_BASE_URL}/employees/status/${emp.employee_number}`,
       {
         method: "PUT",
         headers: {
@@ -80,7 +81,7 @@ function Employees() {
 
   const sendResetLink = async (employeeNumber) => {
     const res = await fetch(
-      `http://localhost:3001/api/send-reset-link/${employeeNumber}`,
+      `${API_BASE_URL}/send-reset-link/${employeeNumber}`,
       {
         method: "POST",
         headers: {

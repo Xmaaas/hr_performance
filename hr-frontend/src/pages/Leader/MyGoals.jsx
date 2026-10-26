@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../../config';
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -13,7 +14,7 @@ function MyGoals() {
 
     useEffect(() => {
     const loadEmployees = async () => {
-      const res = await fetch("http://localhost:3001/api/employees", {
+      const res = await fetch(`${API_BASE_URL}/employees`, {
         headers: {
           Authorization: "Bearer " + localStorage.getItem("token")
         }
@@ -30,7 +31,7 @@ function MyGoals() {
   }, []);
 
   useEffect(() => {
-    fetch("http://localhost:3001/api/goals/my", {
+    fetch(`${API_BASE_URL}/goals/my`, {
       headers: {
         Authorization: "Bearer " + localStorage.getItem("token")
       }
@@ -118,7 +119,7 @@ function MyGoals() {
     }
 
     const submitUpdate = () => {
-      fetch(`http://localhost:3001/api/goals/${goal.id}/update`, {
+      fetch(`${API_BASE_URL}/goals/${goal.id}/update`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -363,7 +364,7 @@ const renderGoal = (goal, setGoalState) => (
                       onClick={async () => {
                         if (!window.confirm("Biztosan törlöd ezt a célt?")) return;
 
-                        const res = await fetch(`http://localhost:3001/api/goals/${goal.id}`, {
+                        const res = await fetch(`${API_BASE_URL}/goals/${goal.id}`, {
                           method: "DELETE",
                           headers: {
                             Authorization: "Bearer " + localStorage.getItem("token")
@@ -598,7 +599,7 @@ const EditModal = ({ editGoal, setEditGoal, employees, setAssigned, setCreated }
               assigned_to
             };
 
-            const res = await fetch(`http://localhost:3001/api/goals/${editGoal.id}`, {
+            const res = await fetch(`${API_BASE_URL}/goals/${editGoal.id}`, {
               method: "PUT",
               headers: {
                 "Content-Type": "application/json",

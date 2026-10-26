@@ -8,6 +8,7 @@ const authRoutes = require("./routes/auth");
 const userRoutes = require("./routes/users");
 const goalsRoutes = require("./routes/goals");
 const skillsRoutes = require("./routes/skills");
+const dashboardRoutes = require("./routes/dashboard");
 
 app.use(cors());
 app.use(express.json());
@@ -16,6 +17,7 @@ app.use("/api", authRoutes);
 app.use("/api", userRoutes);
 app.use("/api", goalsRoutes);
 app.use("/api", skillsRoutes);
+app.use("/api", dashboardRoutes);
 
 app.get('/', (req, res) => {
   res.send('Backend működik');

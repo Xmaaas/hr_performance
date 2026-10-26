@@ -1,16 +1,17 @@
+import { API_BASE_URL } from '../config';
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 
 
 function ResetPassword() {
-  const { token } = useParams();   // <<< EZ A LÉNYEG
+  const { token } = useParams();
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
   const navigate = useNavigate();
   console.log("TOKEN FROM PARAMS:", token);
 
   const handleSubmit = async () => {
-    const res = await fetch("http://localhost:3001/api/reset-password", {
+    const res = await fetch(`${API_BASE_URL}/reset-password`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ token, password })

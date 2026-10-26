@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../config';
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -18,7 +19,7 @@ function AuditLog() {
       return;
     }
 
-    fetch("http://localhost:3001/api/audit-log", {
+    fetch(`${API_BASE_URL}/audit-log`, {
       headers: {
         Authorization: `Bearer ${token}`
       }

@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../../config';
 import { useEffect, useState } from "react";
 
 function SkillGroupsAdmin() {
@@ -16,7 +17,7 @@ function SkillGroupsAdmin() {
 
   const loadGroups = () => {
     setLoading(true);
-    fetch("http://localhost:3001/api/skills/groups", {
+    fetch(`${API_BASE_URL}/skills/groups`, {
       headers: { Authorization: `Bearer ${token}` }
     })
       .then(res => res.json())
@@ -27,7 +28,7 @@ function SkillGroupsAdmin() {
   };
 
   const loadEmployees = () => {
-    fetch("http://localhost:3001/api/employees/employees", {
+    fetch(`${API_BASE_URL}/employees/employees`, {
       headers: { Authorization: `Bearer ${token}` }
     })
       .then(res => res.json())
@@ -45,7 +46,7 @@ function SkillGroupsAdmin() {
   const createGroup = async () => {
     if (!newGroupName.trim()) return alert("A csoport neve kötelező.");
 
-    const res = await fetch("http://localhost:3001/api/skills/groups", {
+    const res = await fetch(`${API_BASE_URL}/skills/groups`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -68,7 +69,7 @@ function SkillGroupsAdmin() {
     const employee_number = newMemberByGroup[groupId];
     if (!employee_number) return;
 
-    const res = await fetch(`http://localhost:3001/api/skills/groups/${groupId}/members`, {
+    const res = await fetch(`${API_BASE_URL}/skills/groups/${groupId}/members`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -88,7 +89,7 @@ function SkillGroupsAdmin() {
 
   const removeMember = async (groupId, employee_number) => {
     const res = await fetch(
-      `http://localhost:3001/api/skills/groups/${groupId}/members/${employee_number}`,
+      `${API_BASE_URL}/skills/groups/${groupId}/members/${employee_number}`,
       {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` }
@@ -102,7 +103,7 @@ function SkillGroupsAdmin() {
     const label = newCriteriaByGroup[groupId];
     if (!label || !label.trim()) return;
 
-    const res = await fetch(`http://localhost:3001/api/skills/groups/${groupId}/criteria`, {
+    const res = await fetch(`${API_BASE_URL}/skills/groups/${groupId}/criteria`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -122,7 +123,7 @@ function SkillGroupsAdmin() {
 
   const removeCriteria = async (groupId, criteriaId) => {
     const res = await fetch(
-      `http://localhost:3001/api/skills/groups/${groupId}/criteria/${criteriaId}`,
+      `${API_BASE_URL}/skills/groups/${groupId}/criteria/${criteriaId}`,
       {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` }

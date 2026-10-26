@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../../config';
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
@@ -22,7 +23,7 @@ export default function EmployeeSkillProfile() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    fetch(`http://localhost:3001/api/skills/employee/${employee_number}/periods`, {
+    fetch(`${API_BASE_URL}/skills/employee/${employee_number}/periods`, {
       headers: { Authorization: `Bearer ${token}` }
     })
       .then(async res => {
@@ -46,7 +47,7 @@ export default function EmployeeSkillProfile() {
     if (!selectedPeriod) return;
 
     setLoading(true);
-    fetch(`http://localhost:3001/api/skills/employee/${employee_number}/evaluation?period_id=${selectedPeriod}`, {
+    fetch(`${API_BASE_URL}/skills/employee/${employee_number}/evaluation?period_id=${selectedPeriod}`, {
       headers: { Authorization: `Bearer ${token}` }
     })
       .then(async res => {
